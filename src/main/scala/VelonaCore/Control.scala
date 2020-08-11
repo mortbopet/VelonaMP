@@ -8,21 +8,14 @@ object CTRL {
     val nop, add, sub, shra, and, or, xor, loadi, loadhi, loadh2i, loadh3i =
       Value;
   }
-
   object MEM extends ChiselEnum { val nop, wr, rd = Value; }
-
   object ACC_SRC extends ChiselEnum { val acc, alu, reg, mem = Value; }
-
   object ALU_OP1 extends ChiselEnum { val acc, pc, addr = Value; }
-
   object ALU_OP2 extends ChiselEnum { val reg, imm = Value; }
-
   object MEM_SIZE extends ChiselEnum { val byte, half, word = Value; }
-
   object BR extends ChiselEnum {
     val nop, br, brz, brnz, brp, brn = Value;
   }
-
   object IMM extends ChiselEnum {
     val nop, shl1, shl2, branch, loadi, loadhi, loadh2i, loadh3i, jal = Value;
   }
@@ -130,7 +123,7 @@ class Control extends Module {
     io.ctrl_mem_size := CTRL.MEM_SIZE.half
   }.elsewhen(List(ISA.Op.ldind, ISA.Op.stind).contains(io.op).B) {
     io.ctrl_mem_size := CTRL.MEM_SIZE.word
-  }
+  }.otherwise{ io.ctrl_mem_size := CTRL.MEM_SIZE.word }
 
   // Register control
   when(

@@ -14,13 +14,13 @@ class VelonaCore extends Module {
     decode.io.instr := io.instr
     io.out := decode.io.op
 
+    val control = Module(new Control())
+    control.io.op := decode.io.op
+
     val immediate = Module(new Immediate())
     immediate.io.instr := io.instr;
     io.imm := immediate.io.imm;
-    immediate.io.op := decode.io.op
-
-    val control = Module(new Control())
-    control.io.op := decode.io.op
+    immediate.io.op := control.io.ctrl_imm
 }
 
 object VelonaCore extends App {

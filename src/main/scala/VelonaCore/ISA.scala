@@ -39,18 +39,18 @@ object ISA {
     (BitPat("b00110???"), Op.store), // OPC_STORE
     (BitPat("b001110??"), Op.nop), // OPC_OUT
     (BitPat("b000001??"), Op.nop), // OPC_IN
-    (BitPat("b01000???"), Op.nop), // OPC_JAL
-    (BitPat("b01010???"), Op.nop), // OPC_LDADDR
-    (BitPat("b01100?00"), Op.nop), // OPC_LDIND
-    (BitPat("b01100?01"), Op.nop), // OPC_LDINDB
-    (BitPat("b01100?10"), Op.nop), // OPC_LDINDH
-    (BitPat("b01110?00"), Op.nop), // OPC_STIND
-    (BitPat("b01110?01"), Op.nop), // OPC_STINDB
-    (BitPat("b01110?10"), Op.nop), // OPC_STINDH
-    (BitPat("b1000????"), Op.nop), // OPC_BR
-    (BitPat("b1001????"), Op.nop), // OPC_BRZ
-    (BitPat("b1010????"), Op.nop), // OPC_BRNZ
-    (BitPat("b1011????"), Op.nop), // OPC_BRP
-    (BitPat("b1100????"), Op.nop) // OPC_BRN
+    (BitPat("b01000???"), Op.jal), // OPC_JAL
+    (BitPat("b01010???"), Op.ldaddr), // OPC_LDADDR
+    (BitPat("b01100?00"), Op.ldind), // OPC_LDIND
+    (BitPat("b01100?01"), Op.ldindb), // OPC_LDINDB
+    (BitPat("b01100?10"), Op.ldindh), // OPC_LDINDH
+    (BitPat("b01110?00"), Op.stind), // OPC_STIND
+    (BitPat("b01110?01"), Op.stindb), // OPC_STINDB
+    (BitPat("b01110?10"), Op.stindh), // OPC_STINDH
+    (BitPat("b1000????"), Op.br), // OPC_BR
+    (BitPat("b1001????"), Op.brz), // OPC_BRZ
+    (BitPat("b1010????"), Op.brnz), // OPC_BRNZ
+    (BitPat("b1011????"), Op.brp), // OPC_BRP
+    (BitPat("b1100????"), Op.brn) // OPC_BRN
   )
 }
