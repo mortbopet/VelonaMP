@@ -1,7 +1,8 @@
-package VelonaCore
+package velonamp.velonacore
 
 import chisel3._
-import chisel3.Driver
+import velonamp.memory.PodMemory
+
 
 class VelonaCore extends Module {
     val io = IO(new Bundle {
@@ -21,6 +22,8 @@ class VelonaCore extends Module {
     immediate.io.instr := io.instr;
     io.imm := immediate.io.imm;
     immediate.io.op := control.io.ctrl_imm
+
+    val mem = Module(new PodMemory())
 }
 
 object VelonaCore extends App {
