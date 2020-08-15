@@ -7,6 +7,7 @@ import chisel3.experimental.ChiselEnum
 import chisel3.dontTouch
 
 import velonamp.util._
+import velonamp.common.ISA
 
 object CTRL {
   object ALU extends ChiselEnum {
@@ -37,7 +38,7 @@ class Control extends Module {
     val ctrl_alu_op1  = Output(CTRL.ALU_OP1())
     val ctrl_alu_op2  = Output(CTRL.ALU_OP2())
     val ctrl_br       = Output(CTRL.BR())
-    val ctrl_dm_op    = Output(CTRL.MEM())
+    val ctrl_mem_op    = Output(CTRL.MEM())
     val ctrl_mem_size = Output(CTRL.MEM_SIZE())
     val ctrl_reg_op   = Output(CTRL.MEM())
   })
@@ -112,14 +113,14 @@ class Control extends Module {
 
   // Data memory control
   when(List(ISA.OP_ldind, ISA.OP_ldindb, ISA.OP_ldindh).contains(io.op).B) {
-    io.ctrl_dm_op := CTRL.MEM.rd
+    io.ctrl_mem_op := CTRL.MEM.rd
   }
     .elsewhen(
       List(ISA.OP_stind, ISA.OP_stindb, ISA.OP_stindh).contains(io.op).B
     ) {
-      io.ctrl_dm_op := CTRL.MEM.wr
+      io.ctrl_mem_op := CTRL.MEM.wr
     }
-    .otherwise { io.ctrl_dm_op := CTRL.MEM.nop }
+    .otherwise { io.ctrl_mem_op := CTRL.MEM.nop }
 
   // Data memory access size control
   when(List(ISA.OP_ldindb, ISA.OP_stindb).contains(io.op).B) {
