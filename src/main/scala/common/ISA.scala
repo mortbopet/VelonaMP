@@ -1,4 +1,4 @@
-package velonamp.velonacore
+package velonamp.common
 import chisel3._
 import chisel3.util.{BitPat, Enum}
 
@@ -76,5 +76,19 @@ object ISA {
     (BitPat("b1010????"), OP_brnz),    // OPC_BRNZ
     (BitPat("b1011????"), OP_brp),     // OPC_BRP
     (BitPat("b1100????"), OP_brn)      // OPC_BRN
+  )
+}
+
+object ABI {
+    val ConstantRegisters = List(
+    (100.U, 0x0.U),
+    (101.U, 0x1.U),
+    (102.U, 0x80.U),
+    (103.U, 0x8000.U),
+    (104.U, "x80000000".U),
+    (105.U, 0xff.U),
+    (106.U, 0xffff.U),
+    (107.U, "xffff0000".U),
+    (108.U, 0x7fffffff.U)
   )
 }
