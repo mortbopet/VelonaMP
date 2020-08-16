@@ -9,12 +9,9 @@ import chisel3.util.log2Ceil
 
 class VelonaCore extends Module {
   val io = IO(new Bundle {
-    val data_mem =
-      Flipped(new MemoryReadWriteInterface(ISA.REG_WIDTH, ISA.REG_WIDTH))
-    val instr_data_mem =
-      Flipped(new MemoryReadInterface(ISA.REG_WIDTH, ISA.INSTR_WIDTH))
-    val reg_mem =
-      Flipped(new MemoryReadWriteInterface(ISA.REG_WIDTH, ISA.REG_WIDTH))
+    val data_mem_port  = Flipped(new MemoryReadWriteInterface(ISA.REG_WIDTH, ISA.REG_WIDTH))
+    val reg_port   = Flipped(new MemoryReadWriteInterface(ISA.REG_WIDTH, ISA.REG_WIDTH))
+    val instr_mem_port = Flipped(new MemoryReadInterface(ISA.REG_WIDTH, ISA.INSTR_WIDTH))
   })
 
   // Module instantiations
@@ -25,36 +22,39 @@ class VelonaCore extends Module {
   val alu       = Module(new ALU())
   val state     = Module(new State())
 
+
   // Registers
   val addr_reg = RegInit(0.U(ISA.REG_WIDTH.W))
   val acc_reg  = RegInit(0.U(ISA.REG_WIDTH.W))
   val pc_reg   = RegInit(0.U(ISA.REG_WIDTH.W))
 
   // Wires
-  val instr_data    = io.instr_data_mem.data_out.bits
-  val reg_read_data = io.reg_mem.data_out.bits
-  val mem_read_data = io.data_mem.data_out.bits
+  val instr_data    = io.instr_mem_port.data.bits
+  val reg_read_data = io.reg_port.read.data.bits
+  val mem_read_data = io.data_mem_port.read.data.bits
 
   // Architectural registers
-  io.reg_mem.address := io.instr_data_mem.data_out.bits(7, 0)
-  io.reg_mem.data_out.ready := control.io.ctrl_reg_op === CTRL.MEM.rd
-  io.reg_mem.data_in.valid := control.io.ctrl_reg_op === CTRL.MEM.wr
+  io.reg_port.read.address := io.instr_mem_port.data.bits(7, 0)
+  io.reg_port.read.data.ready := control.io.ctrl_reg_op === CTRL.MEM.rd
 
-  io.reg_mem.data_in.bits := Mux(
+  io.reg_port.write.address := io.instr_mem_port.data.bits(7, 0)
+  io.reg_port.write.data.valid := control.io.ctrl_reg_op === CTRL.MEM.wr
+  io.reg_port.write.data.bits := Mux(
     decode.io.op === ISA.OP_jal,
     alu.io.out.asUInt(),
     acc_reg
   )
 
   // Data memory
-  io.data_mem.address := alu.io.out.asUInt()
-  io.data_mem.data_out.ready := control.io.ctrl_mem_op === CTRL.MEM.rd
-  io.data_mem.data_in.valid := control.io.ctrl_mem_op === CTRL.MEM.wr
-  io.data_mem.data_in.bits := acc_reg
+  io.data_mem_port.read.address := alu.io.out.asUInt()
+  io.data_mem_port.read.data.ready := control.io.ctrl_mem_op === CTRL.MEM.rd
+  io.data_mem_port.write.address := alu.io.out.asUInt()
+  io.data_mem_port.write.data.valid := control.io.ctrl_mem_op === CTRL.MEM.wr
+  io.data_mem_port.write.data.bits := acc_reg
 
-  // instr_datauction memory
-  io.instr_data_mem.address := pc_reg
-  io.instr_data_mem.data_out.ready := true.B
+  // Instruction memory
+  io.instr_mem_port.address := pc_reg
+  io.instr_mem_port.data.ready := true.B
 
   // Decode unit
   decode.io.instr_data := instr_data
@@ -71,33 +71,36 @@ class VelonaCore extends Module {
   immediate.io.instr_data := instr_data
 
   // State unit
-  state.io.data_mem.req := io.data_mem.data_out.ready || io.data_mem.data_in.ready
-  state.io.data_mem.valid := io.data_mem.data_out.valid || io.data_mem.data_in.valid
-  state.io.reg.req := io.reg_mem.data_out.ready || io.reg_mem.data_in.ready
-  state.io.reg.valid := io.reg_mem.data_out.valid || io.reg_mem.data_in.valid
+  state.io.data_mem.req := io.data_mem_port.read.data.ready || io.data_mem_port.write.data.valid
+  state.io.data_mem.valid := io.data_mem_port.read.data.valid || io.data_mem_port.write.data.ready
+  state.io.reg.req := io.reg_port.read.data.ready || io.reg_port.write.data.valid
+  state.io.reg.valid := io.reg_port.read.data.valid || io.reg_port.write.data.ready
 
   // ALU
   alu.io.ctrl_alu := control.io.ctrl_alu
-  alu.io.op1 := acc_reg.asSInt
+
+  alu.io.op1 := addr_reg.asSInt
   switch(control.io.ctrl_alu_op1) {
     is(CTRL.ALU_OP1.acc) { alu.io.op1 := acc_reg.asSInt }
     is(CTRL.ALU_OP1.addr) { alu.io.op1 := addr_reg.asSInt }
     is(CTRL.ALU_OP1.pc) { alu.io.op1 := pc_reg.asSInt }
   }
 
-  alu.io.op2 := immediate.io.imm.asSInt
+  alu.io.op2 := reg_read_data.asSInt
   switch(control.io.ctrl_alu_op2) {
     is(CTRL.ALU_OP2.imm) { alu.io.op2 := immediate.io.imm.asSInt }
-    is(CTRL.ALU_OP2.reg) { alu.io.op2 := addr_reg.asSInt }
+    is(CTRL.ALU_OP2.reg) { alu.io.op2 := reg_read_data.asSInt }
   }
 
   // Program counter source selection
-  when(branch.io.do_branch) {
-    pc_reg := alu.io.out.asUInt()
-  }.elsewhen(decode.io.op === ISA.OP_jal) {
-    pc_reg := acc_reg
-  }.otherwise {
-    pc_reg := pc_reg + log2Ceil(ISA.INSTR_WIDTH).U
+  when(state.io.continue) {
+    when(branch.io.do_branch) {
+      pc_reg := alu.io.out.asUInt()
+    }.elsewhen(decode.io.op === ISA.OP_jal) {
+      pc_reg := acc_reg
+    }.otherwise {
+      pc_reg := pc_reg + log2Ceil(ISA.INSTR_WIDTH).U
+    }
   }
 
   // Accumulator source selection
@@ -105,6 +108,7 @@ class VelonaCore extends Module {
     is(CTRL.ACC_SRC.alu) { acc_reg := alu.io.out.asUInt }
     is(CTRL.ACC_SRC.reg) { acc_reg := reg_read_data }
     is(CTRL.ACC_SRC.mem) { acc_reg := mem_read_data }
+    is(CTRL.ACC_SRC.acc) { acc_reg := acc_reg}
   }
 
   // Address register source selection
