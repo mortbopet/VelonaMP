@@ -14,6 +14,7 @@ class Decode extends Module {
   // Priority decode based on the matched instructions. If no match is found,
   // defaults to a NOP operation
   val matchvector =
-    ISA.Opcodes.map(x => (x._1 === io.instr_data, x._2)) :+ (true.B, ISA.OP_nop)
+    ISA.Opcodes.map(x => (x._1 === io.instr_data(15, 8), x._2)) :+ (true.B, ISA.OP_nop)
   io.op := Mux1H(matchvector)
 }
+
