@@ -12,31 +12,31 @@ class Immediate extends Module {
     val imm        = Output(UInt(ISA.REG_WIDTH.W))
   })
 
-  val imm = Wire(UInt(ISA.REG_WIDTH.W))
+  val imm = WireDefault(0.U)
+  io.imm := imm
 
-  when(io.ctrl_imm === CTRL.IMM.loadi) {
-    imm := io.instr_data(7, 0).asSInt().pad(ISA.REG_WIDTH).asUInt()
-  }
-    .elsewhen(io.ctrl_imm === CTRL.IMM.shl1) {
+  switch(io.ctrl_imm) {
+    is(CTRL.IMM.loadi) {
+      imm := io.instr_data(7, 0).asSInt().pad(ISA.REG_WIDTH).asUInt()
+    }
+    is(CTRL.IMM.shl1) {
       imm := io.instr_data(7, 0).asSInt().pad(ISA.REG_WIDTH).asUInt() << 1
     }
-    .elsewhen(io.ctrl_imm === CTRL.IMM.shl2) {
+    is(CTRL.IMM.shl2) {
       imm := io.instr_data(7, 0).asSInt().pad(ISA.REG_WIDTH).asUInt() << 2
     }
-    .elsewhen(io.ctrl_imm === CTRL.IMM.loadhi) {
+    is(CTRL.IMM.loadhi) {
       imm := io.instr_data(7, 0).asSInt().pad(ISA.REG_WIDTH).asUInt() << 8
     }
-    .elsewhen(io.ctrl_imm === CTRL.IMM.loadh2i) {
+    is(CTRL.IMM.loadh2i) {
       imm := io.instr_data(7, 0).asSInt().pad(ISA.REG_WIDTH).asUInt() << 16
     }
-    .elsewhen(io.ctrl_imm === CTRL.IMM.loadh3i) {
+    is(CTRL.IMM.loadh3i) {
       imm := io.instr_data(7, 0).asSInt().pad(ISA.REG_WIDTH).asUInt() << 24
     }
-    .elsewhen(io.ctrl_imm === CTRL.IMM.branch) {
+    is(CTRL.IMM.branch) {
       imm := io.instr_data(7, 0).asSInt().pad(ISA.REG_WIDTH).asUInt() << 1
     }
-    .elsewhen(io.ctrl_imm === CTRL.IMM.jal) { imm := Log2(ISA.INSTR_WIDTH.U) }
-    .otherwise { imm := 0.U }
-
-  io.imm := imm
+    is(CTRL.IMM.jal) { imm := Log2(ISA.INSTR_WIDTH.U) }
+  }
 }
