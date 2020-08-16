@@ -45,7 +45,7 @@ class Control extends Module {
 
   // ALU control
   when(
-    List(
+    VecInit(
       ISA.OP_addr,
       ISA.OP_addi,
       ISA.OP_br,
@@ -60,20 +60,20 @@ class Control extends Module {
       ISA.OP_stind,
       ISA.OP_stindb,
       ISA.OP_stindh
-    ).contains(io.op).B
+    ).contains(io.op)
   ) {
     io.ctrl_alu := CTRL.ALU.add
   }
-    .elsewhen(List(ISA.OP_subr, ISA.OP_subi).contains(io.op).B) {
+    .elsewhen(VecInit(ISA.OP_subr, ISA.OP_subi).contains(io.op)) {
       io.ctrl_alu := CTRL.ALU.sub
     }
-    .elsewhen(List(ISA.OP_andi, ISA.OP_andr).contains(io.op).B) {
+    .elsewhen(VecInit(ISA.OP_andi, ISA.OP_andr).contains(io.op)) {
       io.ctrl_alu := CTRL.ALU.and
     }
-    .elsewhen(List(ISA.OP_ori, ISA.OP_orr).contains(io.op).B) {
+    .elsewhen(VecInit(ISA.OP_ori, ISA.OP_orr).contains(io.op)) {
       io.ctrl_alu := CTRL.ALU.or
     }
-    .elsewhen(List(ISA.OP_xori, ISA.OP_xorr).contains(io.op).B) {
+    .elsewhen(VecInit(ISA.OP_xori, ISA.OP_xorr).contains(io.op)) {
       io.ctrl_alu := CTRL.ALU.xor
     }
     .elsewhen(io.op === ISA.OP_shra) { io.ctrl_alu := CTRL.ALU.shra }
@@ -85,7 +85,7 @@ class Control extends Module {
 
   // Accumulator source control
   when(
-    List(
+    VecInit(
       ISA.OP_addr,
       ISA.OP_addi,
       ISA.OP_subr,
@@ -101,39 +101,39 @@ class Control extends Module {
       ISA.OP_loadhi,
       ISA.OP_loadh2i,
       ISA.OP_loadh3i
-    ).contains(io.op).B
+    ).contains(io.op)
   ) {
     io.ctrl_acc := CTRL.ACC_SRC.alu
   }
     .elsewhen(
-      List(ISA.OP_ldind, ISA.OP_ldindb, ISA.OP_ldindh).contains(io.op).B
+      VecInit(ISA.OP_ldind, ISA.OP_ldindb, ISA.OP_ldindh).contains(io.op)
     ) { io.ctrl_acc := CTRL.ACC_SRC.mem }
     .elsewhen(io.op === ISA.OP_load) { io.ctrl_acc := CTRL.ACC_SRC.reg }
     .otherwise { io.ctrl_acc := CTRL.ACC_SRC.acc }
 
   // Data memory control
-  when(List(ISA.OP_ldind, ISA.OP_ldindb, ISA.OP_ldindh).contains(io.op).B) {
+  when(VecInit(ISA.OP_ldind, ISA.OP_ldindb, ISA.OP_ldindh).contains(io.op)) {
     io.ctrl_mem_op := CTRL.MEM.rd
   }
     .elsewhen(
-      List(ISA.OP_stind, ISA.OP_stindb, ISA.OP_stindh).contains(io.op).B
+      VecInit(ISA.OP_stind, ISA.OP_stindb, ISA.OP_stindh).contains(io.op)
     ) {
       io.ctrl_mem_op := CTRL.MEM.wr
     }
     .otherwise { io.ctrl_mem_op := CTRL.MEM.nop }
 
   // Data memory access size control
-  when(List(ISA.OP_ldindb, ISA.OP_stindb).contains(io.op).B) {
+  when(VecInit(ISA.OP_ldindb, ISA.OP_stindb).contains(io.op)) {
     io.ctrl_mem_size := CTRL.MEM_SIZE.byte
-  }.elsewhen(List(ISA.OP_ldindh, ISA.OP_stindh).contains(io.op).B) {
+  }.elsewhen(VecInit(ISA.OP_ldindh, ISA.OP_stindh).contains(io.op)) {
     io.ctrl_mem_size := CTRL.MEM_SIZE.half
-  }.elsewhen(List(ISA.OP_ldind, ISA.OP_stind).contains(io.op).B) {
+  }.elsewhen(VecInit(ISA.OP_ldind, ISA.OP_stind).contains(io.op)) {
     io.ctrl_mem_size := CTRL.MEM_SIZE.word
   }.otherwise { io.ctrl_mem_size := CTRL.MEM_SIZE.word }
 
   // Register control
   when(
-    List(
+    VecInit(
       ISA.OP_addr,
       ISA.OP_subr,
       ISA.OP_andr,
@@ -141,23 +141,23 @@ class Control extends Module {
       ISA.OP_xorr,
       ISA.OP_load,
       ISA.OP_ldaddr
-    ).contains(io.op).B
+    ).contains(io.op)
   ) {
     io.ctrl_reg_op := CTRL.MEM.rd
-  }.elsewhen(List(ISA.OP_store, ISA.OP_jal).contains(io.op).B) {
+  }.elsewhen(VecInit(ISA.OP_store, ISA.OP_jal).contains(io.op)) {
     io.ctrl_reg_op := CTRL.MEM.wr
   }.otherwise { io.ctrl_reg_op := CTRL.MEM.nop }
 
   // Immediate control
   when(
-    List(
+    VecInit(
       ISA.OP_addi,
       ISA.OP_subi,
       ISA.OP_andi,
       ISA.OP_ori,
       ISA.OP_xori,
       ISA.OP_loadi
-    ).contains(io.op).B
+    ).contains(io.op)
   ) {
     io.ctrl_imm := CTRL.IMM.loadi
   }
@@ -166,39 +166,39 @@ class Control extends Module {
     .elsewhen(io.op === ISA.OP_loadh3i) { io.ctrl_imm := CTRL.IMM.loadh3i }
     .elsewhen(io.op === ISA.OP_jal) { io.ctrl_imm := CTRL.IMM.jal }
     .elsewhen(
-      List(ISA.OP_br, ISA.OP_brz, ISA.OP_brp, ISA.OP_brn, ISA.OP_brnz)
+      VecInit(ISA.OP_br, ISA.OP_brz, ISA.OP_brp, ISA.OP_brn, ISA.OP_brnz)
         .contains(io.op)
-        .B
+
     ) {
       io.ctrl_imm := CTRL.IMM.branch
     }
-    .elsewhen(List(ISA.OP_stindb, ISA.OP_ldindb).contains(io.op).B) {
+    .elsewhen(VecInit(ISA.OP_stindb, ISA.OP_ldindb).contains(io.op)) {
       io.ctrl_imm := CTRL.IMM.loadi
     }
-    .elsewhen(List(ISA.OP_stindh, ISA.OP_ldindh).contains(io.op).B) {
+    .elsewhen(VecInit(ISA.OP_stindh, ISA.OP_ldindh).contains(io.op)) {
       io.ctrl_imm := CTRL.IMM.shl1
     }
-    .elsewhen(List(ISA.OP_stind, ISA.OP_ldind).contains(io.op).B) {
+    .elsewhen(VecInit(ISA.OP_stind, ISA.OP_ldind).contains(io.op)) {
       io.ctrl_imm := CTRL.IMM.shl2
     }
     .otherwise { io.ctrl_imm := CTRL.IMM.nop }
 
   // ALU Operand selection
   when(
-    List(ISA.OP_jal, ISA.OP_br, ISA.OP_brz, ISA.OP_brnz, ISA.OP_brp, ISA.OP_brn)
+    VecInit(ISA.OP_jal, ISA.OP_br, ISA.OP_brz, ISA.OP_brnz, ISA.OP_brp, ISA.OP_brn)
       .contains(io.op)
-      .B
+
   ) {
     io.ctrl_alu_op1 := CTRL.ALU_OP1.pc
   }.elsewhen(
-    List(
+    VecInit(
       ISA.OP_ldind,
       ISA.OP_ldindh,
       ISA.OP_ldindb,
       ISA.OP_stind,
       ISA.OP_stindh,
       ISA.OP_stindb
-    ).contains(io.op).B
+    ).contains(io.op)
   ) {
     io.ctrl_alu_op1 := CTRL.ALU_OP1.addr
   }.otherwise {
@@ -206,7 +206,7 @@ class Control extends Module {
   }
 
   when(
-    List(
+    VecInit(
       ISA.OP_addi,
       ISA.OP_subi,
       ISA.OP_andi,
@@ -227,15 +227,15 @@ class Control extends Module {
       ISA.OP_loadhi,
       ISA.OP_loadh2i,
       ISA.OP_loadh3i
-    ).contains(io.op).B
+    ).contains(io.op)
   ) {
 
     io.ctrl_alu_op2 := CTRL.ALU_OP2.imm
   }
     .elsewhen(
-      List(ISA.OP_addr, ISA.OP_subr, ISA.OP_andr, ISA.OP_orr, ISA.OP_xorr)
+      VecInit(ISA.OP_addr, ISA.OP_subr, ISA.OP_andr, ISA.OP_orr, ISA.OP_xorr)
         .contains(io.op)
-        .B
+
     ) {
       io.ctrl_alu_op2 := CTRL.ALU_OP2.reg
     }
