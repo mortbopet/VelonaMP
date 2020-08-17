@@ -1,10 +1,11 @@
 
-# Generated files
+# Chisel generated files
 *.v
 *.fir
 *.json
+*.vcd
 
-#
+
 *.bloop/**/*
 *.metals/**/*
 *.class
@@ -24,3 +25,4 @@ project/**/*
 .scala_dependencies
 .worksheet
 .idea
+ 

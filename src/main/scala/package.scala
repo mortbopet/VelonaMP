@@ -6,10 +6,8 @@ import chisel3.experimental.ChiselEnum
 
 
 package object util {
-    // Provides a synthesizable method of checking whether a list of fixed variables
-    // contains a runtime-defined signal
-  def listContains[T <: UInt](lst : List[T], v : T) : Bool = {
-    val hits = lst.map{i => (i === v, true.B)} :+ (true.B, false.B)
-    return Mux1H(hits)
-  }
+  // Instantiation configuration
+  def F_HZ = 100000000
+
+  def LOADER_UART_BAUD = 115200
 }
