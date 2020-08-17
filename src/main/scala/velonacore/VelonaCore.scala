@@ -9,9 +9,9 @@ import chisel3.util.log2Ceil
 
 class VelonaCore extends Module {
   val io = IO(new Bundle {
-    val data_mem_port  = Flipped(new MemoryReadWriteInterface(ISA.REG_WIDTH, ISA.REG_WIDTH))
-    val reg_port   = Flipped(new MemoryReadWriteInterface(ISA.REG_WIDTH, ISA.REG_WIDTH))
-    val instr_mem_port = Flipped(new MemoryReadInterface(ISA.REG_WIDTH, ISA.INSTR_WIDTH))
+    val data_mem_port  = Flipped(new MemoryReadWriteInterface(ISA.REG_WIDTH, ISA.REG_BYTES))
+    val reg_port   = Flipped(new MemoryReadWriteInterface(ISA.REG_WIDTH, ISA.REG_BYTES))
+    val instr_mem_port = Flipped(new MemoryReadInterface(ISA.REG_WIDTH, ISA.INSTR_BYTES))
   })
 
   // Module instantiations
@@ -21,7 +21,6 @@ class VelonaCore extends Module {
   val immediate = Module(new Immediate())
   val alu       = Module(new ALU())
   val state     = Module(new State())
-
 
   // Registers
   val addr_reg = RegInit(0.U(ISA.REG_WIDTH.W))
@@ -45,12 +44,21 @@ class VelonaCore extends Module {
     acc_reg
   )
 
+  io.reg_port.write.mask := VecInit(Seq.fill(ISA.REG_BYTES)(1.B)) // Always write full word
+
   // Data memory
   io.data_mem_port.read.address := alu.io.out.asUInt()
   io.data_mem_port.read.data.ready := control.io.ctrl_mem_op === CTRL.MEM.rd
   io.data_mem_port.write.address := alu.io.out.asUInt()
   io.data_mem_port.write.data.valid := control.io.ctrl_mem_op === CTRL.MEM.wr
   io.data_mem_port.write.data.bits := acc_reg
+
+  io.data_mem_port.write.mask := VecInit(Seq.fill(ISA.REG_BYTES)(0.B))
+  switch(control.io.ctrl_mem_size) {
+    is(CTRL.MEM_SIZE.byte) { io.data_mem_port.write.mask := VecInit(Seq(0.B, 0.B, 0.B, 1.B)) }
+    is(CTRL.MEM_SIZE.half) { io.data_mem_port.write.mask := VecInit(Seq(0.B, 0.B, 1.B, 1.B)) }
+    is(CTRL.MEM_SIZE.word) { io.data_mem_port.write.mask := VecInit(Seq(1.B, 1.B, 1.B, 1.B)) }
+  }
 
   // Instruction memory
   io.instr_mem_port.address := pc_reg

@@ -6,7 +6,9 @@ object ISA {
 
   // ISA constants
   def INSTR_WIDTH = 16
+  def INSTR_BYTES = INSTR_WIDTH / 8
   def REG_WIDTH   = 32
+  def REG_BYTES  = REG_WIDTH / 8
 
   // Datapath operation constants
   def OP_nop     = 0.U(5.W)
