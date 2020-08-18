@@ -3,8 +3,9 @@ package velonamp
 import chisel3._
 
 import velonamp.velonacore._
-import velonamp.memory.{RWMemory}
+import velonamp.memory._
 import velonamp.peripherals.{Loader, UART_rx}
+import velonamp.interconnect._
 
 import chisel3.iotesters.{ChiselFlatSpec, Driver, PeekPokeTester}
 
@@ -24,8 +25,10 @@ class VelonaMP extends Module {
   val loader = Module(new Loader())
   val uart_rx =  Module(new UART_rx(velonamp.util.LOADER_UART_BAUD, velonamp.util.F_HZ))
 
-  val instr_mem = Module(new RWMemory(ISA.REG_WIDTH, ISA.REG_BYTES, 1024))
-  val data_mem  = Module(new RWMemory(ISA.REG_WIDTH, ISA.REG_BYTES, 1024))
+  val ocp_bus = Module(new OCPBus(2, 2))
+
+  val instr_mem = Module(new OCPRWMemory(0, ISA.REG_WIDTH, ISA.REG_BYTES, 1024))
+  val data_mem  = Module(new OCPRWMemory(0x1000, ISA.REG_WIDTH, ISA.REG_BYTES, 1024))
   val reg_mem   = Module(new RWMemory(ISA.REG_WIDTH, ISA.REG_BYTES, 256))
 
   core.io.soft_reset := loader.io.system_reset
@@ -86,7 +89,6 @@ class VelonaMPTester(c: VelonaMP, baud : Int, freq : Int) extends PeekPokeTester
 
     step(baud_cycles * 10)
 }
-
 
 class VelonaMPSpec extends ChiselFlatSpec {
   "VelonaMP" should "pass" in {
