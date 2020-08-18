@@ -31,10 +31,20 @@ class VelonaCore extends Module {
   val acc_reg  = RegInit(0.U(ISA.REG_WIDTH.W))
   val pc_reg   = RegInit(0.U(ISA.REG_WIDTH.W))
 
+  // IF stage
+  val if_stage = Reg(new Bundle{
+    val pc = UInt(ISA.REG_WIDTH.W)
+    val do_branch = Bool()
+  })
+
+  if_stage.pc := pc_reg
+  if_stage.do_branch := branch.io.do_branch
+
   // Wires
-  val instr_data    = io.instr_mem_port.data.bits
+  val instr_data = io.instr_mem_port.data.bits
   val reg_read_data = io.reg_port.read.data.bits
   val mem_read_data = io.data_mem_port.read.data.bits
+  val exec_control_flow = if_stage.do_branch || (decode.io.op === ISA.OP_jal)
 
   // Architectural registers
   io.reg_port.read.address := instr_data(7, 0)
@@ -91,8 +101,7 @@ class VelonaCore extends Module {
   state.io.reg.req := io.reg_port.read.data.ready || io.reg_port.write.data.valid
   state.io.reg.valid := io.reg_port.read.data.valid || io.reg_port.write.data.ready
 
-  state.io.instr_mem.req := 1.B
-  state.io.instr_mem.valid := io.instr_mem_port.data.valid
+  state.io.if_do_branch := exec_control_flow
 
   // ALU
   alu.io.ctrl_alu := control.io.ctrl_alu
@@ -119,7 +128,7 @@ class VelonaCore extends Module {
     }.elsewhen(decode.io.op === ISA.OP_jal) {
       pc_reg := acc_reg
     }.otherwise {
-      pc_reg := pc_reg + log2Ceil(ISA.INSTR_WIDTH).U
+      pc_reg := pc_reg + ISA.INSTR_BYTES.U
     }
   }
 
