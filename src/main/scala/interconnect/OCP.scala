@@ -6,6 +6,8 @@ import chisel3.util.{Decoupled, Arbiter}
 import velonamp.common.ISA
 
 object OCP {
+  def BUS_DATA_WIDTH = ISA.REG_WIDTH
+  def BUS_DATA_BYTES = ISA.REG_BYTES
   object MCmd {
     def idle  = 0
     def write = 1

@@ -14,7 +14,7 @@ class VelonaCoreInterface extends Bundle {
   val data_mem_port =
     new MemoryExclusiveReadWriteInterface(ISA.REG_WIDTH, ISA.REG_BYTES)
   val instr_mem_port =
-    new MemoryExclusiveReadWriteInterface(ISA.REG_WIDTH, ISA.REG_BYTES)
+    new MemoryExclusiveReadWriteInterface(ISA.REG_WIDTH, ISA.INSTR_BYTES)
 }
 
 class VelonaCore extends Module {
@@ -83,7 +83,7 @@ class VelonaCore extends Module {
   }
 
   // =========================== Instruction memory ============================
-  io.instr_mem_port.mask := VecInit(Seq.fill(ISA.REG_BYTES)(1.B))
+  io.instr_mem_port.mask := VecInit(Seq.fill(ISA.INSTR_BYTES)(1.B))
   io.instr_mem_port.address := pc_reg
   io.instr_mem_port.op.bits := MemoryExclusiveReadWriteInterface.op_rd
   io.instr_mem_port.op.valid := true.B

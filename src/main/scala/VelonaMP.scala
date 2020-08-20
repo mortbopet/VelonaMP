@@ -22,8 +22,10 @@ class VelonaMP(n_cores : Int) extends Module {
   // Single core
   val reg_mem = Module(new RWMemory(ISA.REG_WIDTH, ISA.REG_BYTES, 256))
   val core = Module(new VelonaCore())
-  val icache = Module(new Cache(4, 4, true))
-  val dcache = Module(new Cache(4, 4))
+  // 16-bit block direct mapped cache
+  val icache = Module(new Cache(4, 4, ISA.INSTR_BYTES, true))
+  // 32-bit block direct mapped cache
+  val dcache = Module(new Cache(4, 4, ISA.REG_BYTES))
 
   icache.io.host_interface <> io.imem_interface
   dcache.io.host_interface <> io.dmem_interface
