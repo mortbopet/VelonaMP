@@ -10,10 +10,9 @@ class MemoryState extends Bundle {
 
 class State extends Module {
   val io = IO(new Bundle {
-    val soft_reset = Input(Bool())
-
     val reg = new MemoryState()
     val data_mem = new MemoryState()
+    val instr_mem = new MemoryState()
 
     val if_do_branch = Input(Bool())
 
@@ -22,6 +21,7 @@ class State extends Module {
 
   val reg_ready = !io.reg.req || (io.reg.req && io.reg.valid)
   val data_mem_ready = !io.data_mem.req || (io.data_mem.req && io.data_mem.valid)
+  val instr_mem_ready = !io.instr_mem.req || (io.instr_mem.req && io.instr_mem.valid)
 
-  io.continue := !io.if_do_branch && reg_ready && data_mem_ready
+  io.continue := !io.if_do_branch && reg_ready && data_mem_ready && instr_mem_ready
 }

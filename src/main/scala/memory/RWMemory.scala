@@ -11,14 +11,14 @@ import velonamp.interconnect._
 import scala.collection.mutable
 
 class MemoryReadInterface(val addr_width: Int, val data_bytes : Int) extends Bundle {
-  val address = Input(UInt(addr_width.W))
-  val data    = Decoupled(UInt((data_bytes*8).W))
+  val address = Output(UInt(addr_width.W))
+  val data    = Flipped(Decoupled(UInt((data_bytes*8).W)))
 }
 
 class MemoryWriteInterface(val addr_width: Int, val data_bytes : Int) extends Bundle {
-  val address = Input(UInt(addr_width.W))
-  val mask = Input(Vec(data_bytes, Bool()))
-  val data    = Flipped(Decoupled(UInt((data_bytes*8).W)))
+  val address = Output(UInt(addr_width.W))
+  val mask = Output(Vec(data_bytes, Bool()))
+  val data    = Decoupled(UInt((data_bytes*8).W))
 }
 
 class MemoryReadWriteInterface(val addr_width: Int, val w_data: Int)
@@ -28,28 +28,30 @@ class MemoryReadWriteInterface(val addr_width: Int, val w_data: Int)
 }
 
 object MemoryExclusiveReadWriteInterface {
-  val op_nop :: op_rd :: op_wr :: Nil = Enum(3)
+  val op_rd :: op_wr :: Nil = Enum(2)
 }
 
 class MemoryExclusiveReadWriteInterface(val addr_width: Int, val data_bytes : Int)
   extends Bundle {
   val address = Output(UInt(addr_width.W))
   val mask = Output(Vec(data_bytes, Bool()))
-  val data_in    = Output(UInt((data_bytes*8).W))
+  val data_out = Output(UInt((data_bytes*8).W))
+  val data_in    = Input(UInt((data_bytes*8).W))
   // Valid/ready handshaking between source and sink to be performed on the
   // op signal
-  val op = Decoupled(UInt(2.W))
-  val data_out = Input(UInt((data_bytes*8).W))
+  val op = Decoupled(UInt())
 }
 
 class RWMemory(addr_width: Int, data_bytes: Int, size: Int) extends Module {
-  val io = IO(new MemoryReadWriteInterface(addr_width, data_bytes))
+  val io = IO(Flipped(new MemoryReadWriteInterface(addr_width, data_bytes)))
 
   val mem = SyncReadMem(size, Vec(data_bytes, UInt(8.W)))
   val writeToReadAddr = io.read.address === io.write.address && io.write.data.valid
 
   val doForwardWrite = RegNext(writeToReadAddr)
   val delayedWriteData = RegNext(io.write.data.bits)
+  // Any operation through the memory takes 1 cycle
+  val operationSuccessful = RegNext(io.write.data.valid)
 
   val inVec = Wire(Vec(data_bytes, UInt(8.W)))
   val readData = Wire(UInt((data_bytes * 8).W))
@@ -62,38 +64,37 @@ class RWMemory(addr_width: Int, data_bytes: Int, size: Int) extends Module {
   readData := mem.read(io.read.address).asUInt()
 
   io.read.data.bits := Mux(doForwardWrite, delayedWriteData, readData)
-  io.read.data.valid := true.B
-  io.write.data.ready := false.B
   when(io.write.data.valid) {
     mem.write(io.write.address, inVec, io.write.mask)
   }
-  io.write.data.ready := true.B
+  io.write.data.ready := operationSuccessful
+  io.read.data.valid := operationSuccessful
 }
 class OCPRWMemory(addr_start : Int, addr_width: Int, data_bytes: Int, size: Int) extends OCPSlave {
-  val mem = Module(new RWMemory(addr_width, data_bytes, size))
   def ocpStart(): UInt = addr_start.U
   def ocpEnd(): UInt = addr_start.U + size.U
 
+  // Any operation through the memory takes 1 cycle
+  val supportsOperation = (ocp_interface.master.mCmd === OCP.MCmd.read.U) || (ocp_interface.master.mCmd === OCP.MCmd.write.U)
+  val operationSuccessful = RegNext(accessIsInThisAddressRange && supportsOperation)
 
-  // Translation between OCP <> Read/Write interface
+  val inVec = Wire(Vec(data_bytes, UInt(8.W)))
+  val readData = Wire(UInt((data_bytes * 8).W))
+  val mem = SyncReadMem(size, Vec(data_bytes, UInt(8.W)))
 
-  val mem_addr = ocp_interface.master.bits.mAddr - addr_start.U
-  /** @todo All of the following assignments are temporary; Proper handshaking will be
-   * implemented later.*/
-  ocp_interface.master.ready := mem.io.read.data.valid // Unused
-  ocp_interface.slave.bits.sData := mem.io.read.data.bits
-  ocp_interface.slave.bits.sCmdAccept := 1.B
-  ocp_interface.slave.bits.sResp := OCP.SResp.dva.U
+  // Split input word to bytes
+  for(i <- 0 until data_bytes) {
+    inVec(i) := ocp_interface.master.mData((i+1)*8 - 1, i*8)
+  }
+  // Merge output bytes to word
+  readData := mem.read(ocp_interface.master.mAddr).asUInt()
 
-  // Write interface
-  mem.io.write.address := mem_addr
-  mem.io.write.mask := ocp_interface.master.bits.mByteEn
-  mem.io.write.data.bits := ocp_interface.master.bits.mData
-  mem.io.write.data.valid := ocp_interface.master.bits.mCmd === OCP.MCmd.write.U
-  mem.io.read.data.ready := 1.B // unused
+  ocp_interface.slave.bits.sData := readData
+  when(accessIsInThisAddressRange && ocp_interface.master.mCmd === OCP.MCmd.write.U) {
+    mem.write(ocp_interface.master.mAddr, inVec, ocp_interface.master.mByteEn)
+  }
 
-  // Read interface
-  mem.io.read.address := mem_addr
+  ocp_interface.slave.bits.sResp := Mux(operationSuccessful, OCP.SResp.dva.U, OCP.SResp.none.U)
 }
 
 class RWMemoryTester(c: RWMemory) extends PeekPokeTester(c) {

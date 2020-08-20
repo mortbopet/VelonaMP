@@ -30,13 +30,13 @@ class UART_tx(baud : Int, freq : Int) extends Module {
         shift_reg := 1.B ## 1.B ## io.data_in.bits ## 0.B
         cnt_reg := bits.U
         baud_counter := baud_max.U
-    } .elsewhen(cnt_reg != 0.U && baud_clk) {
+    } .elsewhen(cnt_reg =/= 0.U && baud_clk) {
         shift_reg := 0.B ## shift_reg(bits - 1, 1)
         cnt_reg := cnt_reg - 1.U
     }
 
     // Baud clock
-    when(cnt_reg != 0.U) {
+    when(cnt_reg =/= 0.U) {
         when(baud_counter === 0.U) {
             baud_counter := baud_max.U
         }.otherwise {
@@ -71,7 +71,7 @@ class UART_rx(baud : Int, freq : Int) extends Module {
         // Start bit
         cnt_reg := bits.U
         baud_counter := baud_max.U
-    } .elsewhen(cnt_reg != 0.U && baud_clk) {
+    } .elsewhen(cnt_reg =/= 0.U && baud_clk) {
         when(cnt_reg === 1.U) {
             got_data := 1.U
         }
@@ -82,7 +82,7 @@ class UART_rx(baud : Int, freq : Int) extends Module {
     }
 
     // Baud clock
-    when(cnt_reg != 0.U) {
+    when(cnt_reg =/= 0.U) {
         when(baud_counter === 0.U) {
             baud_counter := baud_max.U
         }.otherwise {

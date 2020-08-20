@@ -18,7 +18,7 @@ class Branch extends Module {
     (io.ctrl_br === CTRL.BR.brz && io.acc === 0.U) ||
     (io.ctrl_br === CTRL.BR.brp && io.acc.asSInt >= 0.S) ||
     (io.ctrl_br === CTRL.BR.brn && io.acc.asSInt < 0.S) ||
-    (io.ctrl_br === CTRL.BR.brnz && io.acc != 0.U)) {
+    (io.ctrl_br === CTRL.BR.brnz && io.acc =/= 0.U)) {
       io.do_branch := true.B
   } .otherwise {
     io.do_branch := false.B

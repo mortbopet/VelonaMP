@@ -58,14 +58,12 @@ class Cache(n_lines : Int, n_blocks : Int, read_only : Boolean = false) extends 
 
     // Core <> Cache logic
     io.core_interface.op.ready := 0.B
-    io.core_interface.data_in := DontCare
+    io.core_interface.data_in := currentLine.blocks(blockIdx)
     when(!io.soft_reset && state === s_ready && io.core_interface.op.valid) {
         when(cacheHit) {
             when(io.core_interface.op.bits === MemoryExclusiveReadWriteInterface.op_wr) {
                 currentLine.blocks(blockIdx) := io.core_interface.data_out
                 currentLine.dirty := 1.B
-            } .otherwise {
-                io.core_interface.data_in := currentLine.blocks(blockIdx)
             }
             io.core_interface.op.ready := 1.B
         }. otherwise {

@@ -7,16 +7,18 @@ import chisel3.util._
 import velonamp.common.ISA
 import chisel3.util.log2Ceil
 
+class VelonaCoreInterface extends Bundle {
+  val soft_reset = Input(Bool())
+  val reset_pc   = Input(UInt(ISA.REG_WIDTH.W))
+  val reg_port   = new MemoryReadWriteInterface(ISA.REG_WIDTH, ISA.REG_BYTES)
+  val data_mem_port =
+    new MemoryExclusiveReadWriteInterface(ISA.REG_WIDTH, ISA.REG_BYTES)
+  val instr_mem_port =
+    new MemoryExclusiveReadWriteInterface(ISA.REG_WIDTH, ISA.REG_BYTES)
+}
+
 class VelonaCore extends Module {
-  val io = IO(new Bundle {
-    val soft_reset = Input(Bool())
-    val reset_pc  = Input(UInt(ISA.REG_WIDTH.W))
-
-    val data_mem_port  = Flipped(new MemoryReadWriteInterface(ISA.REG_WIDTH, ISA.REG_BYTES))
-    val reg_port   = Flipped(new MemoryReadWriteInterface(ISA.REG_WIDTH, ISA.REG_BYTES))
-    val instr_mem_port = Flipped(new MemoryReadInterface(ISA.REG_WIDTH, ISA.REG_BYTES))
-
-  })
+  val io = IO(new VelonaCoreInterface())
 
   // Module instantiations
   val branch    = Module(new Branch())
@@ -31,22 +33,14 @@ class VelonaCore extends Module {
   val acc_reg  = RegInit(0.U(ISA.REG_WIDTH.W))
   val pc_reg   = RegInit(0.U(ISA.REG_WIDTH.W))
 
-  // IF stage
-  val if_stage = Reg(new Bundle{
-    val pc = UInt(ISA.REG_WIDTH.W)
-    val do_branch = Bool()
-  })
+  // ================================== Wires ==================================
+  val instr_data        = io.instr_mem_port.data_in
+  val reg_read_data     = io.reg_port.read.data.bits
+  val mem_read_data     = io.data_mem_port.data_in
+  val exec_control_flow = branch.io.do_branch || (decode.io.op === ISA.OP_jal)
 
-  if_stage.pc := pc_reg
-  if_stage.do_branch := branch.io.do_branch
 
-  // Wires
-  val instr_data = io.instr_mem_port.data.bits
-  val reg_read_data = io.reg_port.read.data.bits
-  val mem_read_data = io.data_mem_port.read.data.bits
-  val exec_control_flow = if_stage.do_branch || (decode.io.op === ISA.OP_jal)
-
-  // Architectural registers
+  // ========================= Architetural registers ==========================
   io.reg_port.read.address := instr_data(7, 0)
   io.reg_port.read.data.ready := control.io.ctrl_reg_op === CTRL.MEM.rd
 
@@ -58,25 +52,42 @@ class VelonaCore extends Module {
     acc_reg
   )
 
-  io.reg_port.write.mask := VecInit(Seq.fill(ISA.REG_BYTES)(1.B)) // Always write full word
+  io.reg_port.write.mask := VecInit(
+    Seq.fill(ISA.REG_BYTES)(1.B)
+  ) // Always write full word
 
-  // Data memory
-  io.data_mem_port.read.address := alu.io.out.asUInt()
-  io.data_mem_port.read.data.ready := control.io.ctrl_mem_op === CTRL.MEM.rd
-  io.data_mem_port.write.address := alu.io.out.asUInt()
-  io.data_mem_port.write.data.valid := control.io.ctrl_mem_op === CTRL.MEM.wr
-  io.data_mem_port.write.data.bits := acc_reg
-
-  io.data_mem_port.write.mask := VecInit(Seq.fill(ISA.REG_BYTES)(0.B))
-  switch(control.io.ctrl_mem_size) {
-    is(CTRL.MEM_SIZE.byte) { io.data_mem_port.write.mask := VecInit(Seq(1.B, 0.B, 0.B, 0.B)) }
-    is(CTRL.MEM_SIZE.half) { io.data_mem_port.write.mask := VecInit(Seq(1.B, 1.B, 1.B, 1.B)) }
-    is(CTRL.MEM_SIZE.word) { io.data_mem_port.write.mask := VecInit(Seq(1.B, 1.B, 1.B, 1.B)) }
+  // =============================== Data memory ===============================
+  io.data_mem_port.address := alu.io.out.asUInt()
+  io.data_mem_port.op.bits := MemoryExclusiveReadWriteInterface.op_rd
+  io.data_mem_port.op.valid := 0.B
+  io.data_mem_port.data_out := acc_reg
+  when(control.io.ctrl_mem_op =/= CTRL.MEM.nop) {
+    io.data_mem_port.op.valid := 1.B
+    io.data_mem_port.op.bits := Mux(control.io.ctrl_mem_op === CTRL.MEM.rd,
+      MemoryExclusiveReadWriteInterface.op_rd,
+      MemoryExclusiveReadWriteInterface.op_wr
+    )
   }
 
-  // Instruction memory
+  io.data_mem_port.mask := VecInit(Seq.fill(ISA.REG_BYTES)(0.B))
+  switch(control.io.ctrl_mem_size) {
+    is(CTRL.MEM_SIZE.byte) {
+      io.data_mem_port.mask := VecInit(Seq(1.B, 0.B, 0.B, 0.B))
+    }
+    is(CTRL.MEM_SIZE.half) {
+      io.data_mem_port.mask := VecInit(Seq(1.B, 1.B, 0.B, 0.B))
+    }
+    is(CTRL.MEM_SIZE.word) {
+      io.data_mem_port.mask := VecInit(Seq(1.B, 1.B, 1.B, 1.B))
+    }
+  }
+
+  // =========================== Instruction memory ============================
+  io.instr_mem_port.mask := VecInit(Seq.fill(ISA.REG_BYTES)(1.B))
   io.instr_mem_port.address := pc_reg
-  io.instr_mem_port.data.ready := true.B
+  io.instr_mem_port.op.bits := MemoryExclusiveReadWriteInterface.op_rd
+  io.instr_mem_port.op.valid := true.B
+  io.instr_mem_port.data_out := DontCare
 
   // Decode unit
   decode.io.instr_data := instr_data
@@ -93,10 +104,11 @@ class VelonaCore extends Module {
   immediate.io.instr_data := instr_data
 
   // State unit
-  state.io.soft_reset := io.soft_reset
+  state.io.data_mem.req := io.data_mem_port.op.valid
+  state.io.data_mem.valid := io.data_mem_port.op.ready
 
-  state.io.data_mem.req := io.data_mem_port.read.data.ready || io.data_mem_port.write.data.valid
-  state.io.data_mem.valid := io.data_mem_port.read.data.valid || io.data_mem_port.write.data.ready
+  state.io.instr_mem.req := io.instr_mem_port.op.valid
+  state.io.instr_mem.valid := io.instr_mem_port.op.ready
 
   state.io.reg.req := io.reg_port.read.data.ready || io.reg_port.write.data.valid
   state.io.reg.valid := io.reg_port.read.data.valid || io.reg_port.write.data.ready
@@ -122,7 +134,7 @@ class VelonaCore extends Module {
   // Program counter source selection
   when(io.soft_reset) {
     pc_reg := io.reset_pc
-  } .elsewhen(state.io.continue) {
+  }.elsewhen(state.io.continue) {
     when(branch.io.do_branch) {
       pc_reg := alu.io.out.asUInt()
     }.elsewhen(decode.io.op === ISA.OP_jal) {
@@ -137,7 +149,7 @@ class VelonaCore extends Module {
     is(CTRL.ACC_SRC.alu) { acc_reg := alu.io.out.asUInt }
     is(CTRL.ACC_SRC.reg) { acc_reg := reg_read_data }
     is(CTRL.ACC_SRC.mem) { acc_reg := mem_read_data }
-    is(CTRL.ACC_SRC.acc) { acc_reg := acc_reg}
+    is(CTRL.ACC_SRC.acc) { acc_reg := acc_reg }
   }
 
   // Address register source selection

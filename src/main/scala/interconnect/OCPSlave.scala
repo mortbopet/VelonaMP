@@ -11,12 +11,16 @@ trait OCPSlave extends MultiIOModule {
   def ocpStart(): UInt
   def ocpEnd(): UInt
 
-  ocp_interface.slave.valid := 0.B
+  val accessIsInThisAddressRange = Wire(Bool())
+
+  accessIsInThisAddressRange := 0.B
   when(
     ocpStart() <= ocp_interface.master.mAddr &&
       ocp_interface.master.mAddr < ocpEnd()
   ) {
-    ocp_interface.slave.valid := 1.B
+    accessIsInThisAddressRange := 1.B
   }
+
+  ocp_interface.slave.valid := accessIsInThisAddressRange
 }
 
