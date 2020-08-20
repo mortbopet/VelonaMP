@@ -96,12 +96,13 @@ class Cache(n_lines : Int, n_blocks : Int, read_only : Boolean = false) extends 
 
             when(io.host_interface.slave.sResp === OCP.SResp.dva.U) {
                 blocksToStream := blocksToStream - 1.U
+                io.host_interface.master.bits.mCmd := OCP.MCmd.idle.U
                 when(state === s_readLine) {
                     currentLine.blocks(blocksToStream) := io.host_interface.slave.sData
                 }
             }
 
-            when(blocksToStream === 0.U) {
+            when(blocksToStream === 0.U && io.host_interface.master.bits.mCmd === OCP.MCmd.idle.U) {
                 // Current line written back to memory, now read requested line into cache
                 when(state === s_writebackLine) {
                     state := s_readLine
