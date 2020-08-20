@@ -27,6 +27,21 @@ class MemoryReadWriteInterface(val addr_width: Int, val w_data: Int)
   val write = new MemoryWriteInterface(addr_width, w_data)
 }
 
+object MemoryExclusiveReadWriteInterface {
+  val op_nop :: op_rd :: op_wr :: Nil = Enum(3)
+}
+
+class MemoryExclusiveReadWriteInterface(val addr_width: Int, val data_bytes : Int)
+  extends Bundle {
+  val address = Output(UInt(addr_width.W))
+  val mask = Output(Vec(data_bytes, Bool()))
+  val data_in    = Output(UInt((data_bytes*8).W))
+  // Valid/ready handshaking between source and sink to be performed on the
+  // op signal
+  val op = Decoupled(UInt(2.W))
+  val data_out = Input(UInt((data_bytes*8).W))
+}
+
 class RWMemory(addr_width: Int, data_bytes: Int, size: Int) extends Module {
   val io = IO(new MemoryReadWriteInterface(addr_width, data_bytes))
 
@@ -59,15 +74,25 @@ class OCPRWMemory(addr_start : Int, addr_width: Int, data_bytes: Int, size: Int)
   def ocpStart(): UInt = addr_start.U
   def ocpEnd(): UInt = addr_start.U + size.U
 
+
+  // Translation between OCP <> Read/Write interface
+
+  val mem_addr = ocp_interface.master.bits.mAddr - addr_start.U
   /** @todo All of the following assignments are temporary; Proper handshaking will be
    * implemented later.*/
-  ocp_interface.master.ready := 1.B // Unused
-  ocp_interface.slave.bits.sData := mem.io.read.data
+  ocp_interface.master.ready := mem.io.read.data.valid // Unused
+  ocp_interface.slave.bits.sData := mem.io.read.data.bits
   ocp_interface.slave.bits.sCmdAccept := 1.B
   ocp_interface.slave.bits.sResp := OCP.SResp.dva.U
 
-  val mem_addr = ocp_interface.master.bits.mAddr - addr_start.U
+  // Write interface
   mem.io.write.address := mem_addr
+  mem.io.write.mask := ocp_interface.master.bits.mByteEn
+  mem.io.write.data.bits := ocp_interface.master.bits.mData
+  mem.io.write.data.valid := ocp_interface.master.bits.mCmd === OCP.MCmd.write.U
+  mem.io.read.data.ready := 1.B // unused
+
+  // Read interface
   mem.io.read.address := mem_addr
 }
 

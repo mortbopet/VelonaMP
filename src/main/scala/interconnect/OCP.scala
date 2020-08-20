@@ -13,26 +13,40 @@ object OCP {
   }
   object SResp {
     def none = 0
-    def dva = 1
+    def dva  = 1 // Data valid/available
     def fail = 2
-    def err = 3
+    def err  = 3
   }
 }
 
 class OCPMasterLine extends Bundle {
-  val mAddr      = UInt(ISA.REG_WIDTH.W)
-  val mCmd       = UInt(3.W)
-  val mData      = UInt(ISA.REG_WIDTH.W)
-  val mDataValid = UInt(ISA.REG_WIDTH.W)
+  val mAddr   = UInt(ISA.REG_WIDTH.W)
+  val mCmd    = UInt(3.W)
+  val mData   = UInt(ISA.REG_WIDTH.W)
+  val mByteEn = Vec(ISA.REG_BYTES, Bool())
 }
 
 class OCPSlaveLine extends Bundle {
-  val sData      = UInt(ISA.REG_WIDTH.W)
-  val sResp      = UInt(2.W)
-  val sCmdAccept = Bool()
+  val sData = UInt(ISA.REG_WIDTH.W)
+  val sResp = UInt(2.W)
 }
 
-class OCPInterface extends Bundle {
-  val master = Flipped(Decoupled(new OCPMasterLine()))
+/**
+  * An OCP interface.
+  * The ready/valid handshaking on the master/slave line shall be used for
+  * hardware to check whether they are currently being arbitrated on the bus.
+  * After this is confirmed, the OCP master/slave lines may be asserted to
+  * perform a transaction between the (now arbited) master and slave.
+  *
+  * @param (master/slave).valid: Assert for bus request
+  * @param (master/slave).ready: asserted when bus granted
+  */
+class OCPMasterInterface extends Bundle {
+  val master = Decoupled(new OCPMasterLine())
+  val slave  = Input(new OCPSlaveLine())
+}
+
+class OCPSlaveInterface extends Bundle {
   val slave  = Decoupled(new OCPSlaveLine())
+  val master = Input(new OCPMasterLine())
 }

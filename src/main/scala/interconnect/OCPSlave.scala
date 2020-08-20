@@ -6,18 +6,17 @@ import chisel3.util._
 import velonamp.interconnect._
 
 trait OCPSlave extends MultiIOModule {
-  val ocp_interface = IO(new OCPInterface())
+  val ocp_interface = IO(new OCPSlaveInterface())
 
   def ocpStart(): UInt
   def ocpEnd(): UInt
 
   ocp_interface.slave.valid := 0.B
-  when(ocp_interface.master.valid) {
-    when(
-      ocpStart() <= ocp_interface.master.bits.mAddr &&
-        ocp_interface.master.bits.mAddr < ocpEnd()
-    ) {
-      ocp_interface.slave.valid := 1.B
-    }
+  when(
+    ocpStart() <= ocp_interface.master.mAddr &&
+      ocp_interface.master.mAddr < ocpEnd()
+  ) {
+    ocp_interface.slave.valid := 1.B
   }
 }
+
