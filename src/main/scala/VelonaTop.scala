@@ -100,13 +100,14 @@ class VelonaTopTester(c: VelonaTop, baud : Int, freq : Int) extends PeekPokeTest
         intToBitSeq(0), // section start B1
         intToBitSeq(0), // section start B2
         intToBitSeq(0), // section start B2
-        intToBitSeq(2), // # bytes B0
+        intToBitSeq(4), // # bytes B0
         intToBitSeq(0), // # bytes B0
         intToBitSeq(0), // # bytes B0
         intToBitSeq(0), // # bytes B0
         intToBitSeq(5),// data bytes B0 (immediate)
         intToBitSeq(9),// data bytes B1 (ADDI)
-        intToBitSeq(1) // Select "Reset" function
+        intToBitSeq(-1),// data bytes B0 (immediate)
+        intToBitSeq(0x8F)// data bytes B1 (BR + imm)
     )
 
     for (byte <- bytes) {

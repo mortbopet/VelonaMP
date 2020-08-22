@@ -113,8 +113,6 @@ class VelonaCore extends Module {
   state.io.reg.req := io.reg_port.read.data.ready || io.reg_port.write.data.valid
   state.io.reg.valid := io.reg_port.read.data.valid || io.reg_port.write.data.ready
 
-  state.io.if_do_branch := exec_control_flow
-
   // ALU
   alu.io.ctrl_alu := control.io.ctrl_alu
 
