@@ -9,16 +9,16 @@ import velonamp.interconnect._
 import velonamp.peripherals._
 
 import chisel3.iotesters.{ChiselFlatSpec, Driver, PeekPokeTester}
+import chisel3.util.switch
 
 /**
   * Top file for the Velona multiprocessor system
   */
 class VelonaTop extends Module {
   val io = IO(new Bundle {
-    // Inputs
     val uart_rx = Input(Bool())
-
-    // Outputs
+    val leds = Output(Vec(N_LEDS, Bool()))
+    val switches = Input(Vec(N_SWITHCES, Bool()))
     val dummy_out = Output(UInt())
   })
 
@@ -27,16 +27,14 @@ class VelonaTop extends Module {
   val velonamp = Module(new VelonaMP(N_CORES))
 
   // Memories
-  val instr_mem = Module(new OCPRWMemory(0, ISA.REG_WIDTH, ISA.REG_BYTES, 1024))
-  val data_mem = Module(
-    new OCPRWMemory(0x1000, ISA.REG_WIDTH, ISA.REG_BYTES, 1024)
-  )
+  val instr_mem = Module(new OCPRWMemory(ADDRESS_IMEM, ISA.REG_WIDTH, ISA.REG_BYTES, 1024))
+  val data_mem = Module(new OCPRWMemory(ADDRESS_DMEM, ISA.REG_WIDTH, ISA.REG_BYTES, 1024))
 
   // Peripherals
   val loader = Module(new Loader())
-  val uart_rx = Module(
-    new UART_rx(LOADER_UART_BAUD, F_HZ)
-  )
+  val uart_rx = Module(new UART_rx(LOADER_UART_BAUD, F_HZ))
+  val leds = Module(new LEDs(ADDRESS_LED))
+  val switches = Module(new Switches(ADDRESS_LED))
 
   // Interconnect
   val bus_masters = List(
@@ -47,7 +45,9 @@ class VelonaTop extends Module {
 
   val bus_slaves = List(
     instr_mem.ocp_interface,
-    data_mem.ocp_interface
+    data_mem.ocp_interface,
+    leds.ocp_interface,
+    switches.ocp_interface
   )
 
   val ocp_bus = Module(
@@ -73,12 +73,12 @@ class VelonaTop extends Module {
 
   io.dummy_out := data_mem.ocp_interface.slave.bits.sData
 
-  // Loader
+  // Peripherals
   loader.io.data_in <> uart_rx.io.data_out
   velonamp.io.global_reset := loader.io.system_reset
-
-  // UART
   uart_rx.io.rx := io.uart_rx
+  io.leds := leds.leds
+  switches.switches := io.switches
 }
 
 object VelonaTop extends App {
