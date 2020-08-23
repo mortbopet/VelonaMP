@@ -39,7 +39,7 @@ class MemoryExclusiveReadWriteInterface(val addr_width: Int, val data_bytes : In
   val data_in    = Input(UInt((data_bytes*8).W))
   // Valid/ready handshaking between source and sink to be performed on the
   // op signal
-  val op = Decoupled(UInt())
+  val op = Decoupled(UInt(2.W))
 }
 
 class RWMemory(addr_width: Int, data_bytes: Int, size: Int) extends Module {
@@ -51,7 +51,7 @@ class RWMemory(addr_width: Int, data_bytes: Int, size: Int) extends Module {
   val doForwardWrite = RegNext(writeToReadAddr)
   val delayedWriteData = RegNext(io.write.data.bits)
   // Any operation through the memory takes 1 cycle
-  val operationSuccessful = RegNext(io.write.data.valid)
+  val operationSuccessful = RegNext(io.write.data.valid || io.read.data.ready)
 
   val inVec = Wire(Vec(data_bytes, UInt(8.W)))
   val readData = Wire(UInt((data_bytes * 8).W))

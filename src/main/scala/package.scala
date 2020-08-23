@@ -9,10 +9,16 @@ import velonamp.common.ISA
 package object util {
 
   // ================================ Memory map ===============================
-  def ADDRESS_IMEM     = 0x00000000
-  def ADDRESS_DMEM     = 0x00100000
-  def ADDRESS_LED      = 0x10000000
-  def ADDRESS_SWITCHES = 0x10000004
+  def ADDRESS_IMEM = 0x00000000
+  def ADDRESS_DMEM = 0x00100000
+
+  // Hardware peripherals are placed in an uncacheable address space
+  def UNCACHEABLE_START = 0x10000000
+
+  def ADDRESS_LED       = UNCACHEABLE_START
+  def ADDRESS_SWITCHES  = 0x10000004
+
+  def UNCACHEABLE_END   = ADDRESS_SWITCHES + 4
 
   // ======================= Instantiation configuration =======================
   def N_CORES          = 1 /* Number of VelonaCore's*/

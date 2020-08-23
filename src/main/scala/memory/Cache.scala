@@ -4,6 +4,7 @@ import chisel3._
 import velonamp.memory._
 import chisel3.util._
 
+import velonamp.util._
 import velonamp.common.ISA
 import velonamp.interconnect._
 import chisel3.util.log2Ceil
@@ -15,6 +16,10 @@ class CacheLine(val n_blocks: Int, val tag_bits: Int, val block_width: Int)
   val dirty  = Bool()
   val tag    = UInt(tag_bits.W)
   val blocks = Vec(n_blocks, UInt(block_width.W))
+}
+
+object Cache {
+  def genMask(n: Int): Vec[Bool] = { VecInit(Seq.fill(n)(1.B)) }
 }
 
 /** A simple direct-mapped cache.
@@ -39,9 +44,6 @@ class Cache(
   })
 
   // todo: static assert (OCP.BUS_DATA_BYTES % block_bytes == 0)
-
-  def genMask(n: Int): Vec[Bool] = { VecInit(Seq.fill(n)(1.B)) }
-
   val s_ready :: s_readLine :: s_writebackLine :: Nil = Enum(3)
   val state                                           = RegInit(s_ready)
   val blocksToStream                                  = RegInit((n_blocks).U)
@@ -49,31 +51,29 @@ class Cache(
 
   // Compute access constants
   val byteOffset  = log2Ceil(block_bytes)
-  val blockOffset = byteOffset + n_blocks
-  val indexOffset = blockOffset + n_lines
+  val blockOffset = byteOffset + log2Ceil(n_blocks)
+  val indexOffset = blockOffset + log2Ceil(n_lines)
   val tag_bits    = ISA.REG_WIDTH - indexOffset
 
   // Instantiate actual cache hardware
   val cacheLines = Reg(
     Vec(n_lines, new CacheLine(n_blocks, tag_bits, block_bytes * 8))
   )
-  val validBits =
-    RegInit(
-      VecInit(Seq.fill(n_lines)(0.B))
-    ) // Chisel does not seem to like initialization values in Vector-instantiated bundles, so valid bits are kept outside of the CacheLine bundle st. we may zero-initialize
+  // Chisel does not seem to like initialization values in Vector-instantiated bundles, so valid bits are kept outside of the CacheLine bundle st. we may zero-initialize
+  val validBits = RegInit(VecInit(Seq.fill(n_lines)(0.B)))
 
   // Compute access
-  val blockIdx = (io.core_interface.address >> byteOffset) & genMask(
+  val blockIdx = (io.core_interface.address >> byteOffset) & Cache.genMask(
     log2Ceil(n_blocks)
   ).asUInt()
-  val lineIdx = (io.core_interface.address >> blockOffset) & genMask(
+  val lineIdx = (io.core_interface.address >> blockOffset) & Cache.genMask(
     log2Ceil(n_lines)
   ).asUInt()
   val currentTag =
-    (io.core_interface.address >> indexOffset) & genMask(tag_bits).asUInt()
+    (io.core_interface.address >> indexOffset) & Cache.genMask(tag_bits).asUInt()
 
   val currentLine = cacheLines(lineIdx)
-  val cacheHit    = currentLine.tag === currentTag && validBits(lineIdx)
+  val cacheHit    = (currentLine.tag === currentTag && validBits(lineIdx))
 
   // Core <> Cache logic
   io.core_interface.op.ready := 0.B
@@ -101,7 +101,7 @@ class Cache(
   io.host_interface.master.valid := 0.B
   io.host_interface.master.bits.mAddr := DontCare
   io.host_interface.master.bits.mCmd := OCP.MCmd.idle.U
-  io.host_interface.master.bits.mByteEn := genMask(
+  io.host_interface.master.bits.mByteEn := Cache.genMask(
     ISA.REG_BYTES
   ) // Always read/write all bytes
   io.host_interface.master.bits.mData := currentLine.blocks(blocksToStream)
@@ -111,7 +111,6 @@ class Cache(
       when(state === s_readLine) {
         io.host_interface.master.bits.mAddr := ((io.core_interface.address >> blockOffset) << blockOffset) + (blocksToStream << byteOffset)
         io.host_interface.master.bits.mCmd := OCP.MCmd.read.U
-
       }.elsewhen(state === s_writebackLine) {
         io.host_interface.master.bits.mAddr := (currentLine.tag << blockOffset) + (blocksToStream << byteOffset)
         io.host_interface.master.bits.mCmd := OCP.MCmd.write.U
@@ -149,19 +148,88 @@ class Cache(
   }
 }
 
-class CacheTester(c: Cache) extends PeekPokeTester(c) {
+/**
+  * Wraps a Cache with a second OCP interface which bypasses the cache (read-/
+  * write-through to memory) when the core accesses an uncacheable address.
+  */
+class CacheWrapper(
+    n_lines: Int,
+    n_blocks: Int,
+    block_bytes: Int,
+    read_only: Boolean = false
+) extends Module {
+  val io = IO(new Bundle {
+    val core_interface =
+      Flipped(new MemoryExclusiveReadWriteInterface(ISA.REG_WIDTH, block_bytes))
+    val host_interface = new OCPMasterInterface()
+    val soft_reset     = Input(Bool())
+  })
+
+  val uncacheable_access =
+    UNCACHEABLE_START.U <= io.core_interface.address && io.core_interface.address < UNCACHEABLE_END.U
+  val uncacheable_access_handled_reg = RegInit(0.B)
+
+  /* Cache instantiation */
+  val cache = Module(new Cache(n_lines, n_blocks, block_bytes, read_only))
+  val cache_core_interface = Wire(new MemoryExclusiveReadWriteInterface(ISA.REG_WIDTH, block_bytes))
+  cache_core_interface.address := io.core_interface.address
+  cache_core_interface.mask := io.core_interface.mask
+  cache_core_interface.data_out := io.core_interface.data_out
+  cache_core_interface.op.valid := io.core_interface.op.valid && !uncacheable_access
+  cache_core_interface.op.bits := io.core_interface.op.bits
+  cache.io.core_interface <> cache_core_interface
+  cache.io.soft_reset := io.soft_reset
+
+  /* bypass OCP interface*/
+  val bypass_interface = Wire(new OCPMasterInterface())
+  val uncacheable_access_handled = WireDefault(0.B)
+  val uncacheable_data_in = WireDefault(0.U(ISA.REG_WIDTH.W))
+  bypass_interface.master.bits.mAddr := io.core_interface.address
+  bypass_interface.master.bits.mByteEn := Cache.genMask(ISA.REG_BYTES)
+  bypass_interface.master.bits.mCmd := Mux(io.core_interface.op.bits === MemoryExclusiveReadWriteInterface.op_rd, OCP.MCmd.read.U, OCP.MCmd.write.U)
+  bypass_interface.master.bits.mData := io.core_interface.data_out
+  bypass_interface.master.ready := io.host_interface.master.ready
+
+  // OCP I/O logic
+  bypass_interface.master.valid := 0.B
+  when(uncacheable_access) {
+    bypass_interface.master.valid := 1.B // Request bus access
+    when(bypass_interface.master.ready && io.host_interface.slave.sResp === OCP.SResp.dva.U) { // Wait for bus grant
+      uncacheable_access_handled := 1.B
+    }
+  }
+
+  /* Outputs towards core */
+  io.core_interface.op.ready := Mux(uncacheable_access, uncacheable_access_handled, cache_core_interface.op.ready)
+  io.core_interface.data_in := Mux(uncacheable_access, uncacheable_data_in, cache_core_interface.data_in)
+
+  /* Selected host interface MUX */
+  cache.io.host_interface.master.ready := 0.B
+  cache.io.host_interface.slave.sResp := DontCare
+  cache.io.host_interface.slave.sData := DontCare
+  bypass_interface.master.ready := 0.B
+  bypass_interface.slave.sResp := DontCare
+  bypass_interface.slave.sData := DontCare
+  when(uncacheable_access) {
+    io.host_interface <> bypass_interface
+  } .otherwise {
+    io.host_interface <> cache.io.host_interface
+  }
+}
+
+class CacheTester(c: CacheWrapper) extends PeekPokeTester(c) {
   // Core interface
   poke(c.io.core_interface.address, 4)
   poke(c.io.core_interface.op.bits, MemoryExclusiveReadWriteInterface.op_rd)
   poke(c.io.core_interface.op.valid, 1)
 
-  // Host interface
+  // ======================== Test 1: Cacheable address ========================
   poke(c.io.host_interface.master.ready, 1) // Bus grant
   poke(c.io.host_interface.slave.sData, 0)
   poke(c.io.host_interface.slave.sResp, OCP.SResp.dva)
   step(1)
   expect(c.io.core_interface.op.ready, 0, "Line should not be cached")
-  step(4)
+  step(4) // Stream in
   expect(c.io.core_interface.op.ready, 1, "Line should now be available")
 
   poke(c.io.core_interface.address, 5)
@@ -184,13 +252,19 @@ class CacheTester(c: Cache) extends PeekPokeTester(c) {
   step(4)
   poke(c.io.host_interface.master.ready, 1) // Bus granted
   step(10)
+
+  // ======================= Test 2: Uncacheable address =======================
+  poke(c.io.core_interface.address, UNCACHEABLE_START)
+  poke(c.io.host_interface.slave.sData, 0)
+  poke(c.io.host_interface.slave.sResp, OCP.SResp.dva)
+  step(10)
 }
 
 class CacheSpec extends ChiselFlatSpec {
   "CacheSpec" should "pass" in {
     Driver.execute(
       Array("--generate-vcd-output", "on"),
-      () => new Cache(4, 4, ISA.REG_BYTES, false)
+      () => new CacheWrapper(4, 4, ISA.REG_BYTES, false)
     ) { c =>
       new CacheTester(c)
     } should be(true)

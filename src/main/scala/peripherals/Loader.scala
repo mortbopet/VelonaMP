@@ -98,7 +98,7 @@ class Loader extends Module {
     .elsewhen(state === s_load_section_start) {
         when(io.data_in.valid && bytes_to_rec_reg =/= 0.U) {
             // Wait for number of nsections_reg to have been communicated
-            secstart_reg := io.data_in.bits ## secstart_reg(31, 8)
+            secstart_reg := io.data_in.bits ## secstart_reg(Loader.secstart_reg_BYTES * 8 - 1, 8)
             bytes_to_rec_reg := bytes_to_rec_reg - 1.U
         }.elsewhen(bytes_to_rec_reg === 0.U) {
             state := s_load_section_size
@@ -121,7 +121,7 @@ class Loader extends Module {
                 val offset = secstart_reg % ISA.REG_BYTES.U
                 // Each byte is written separately by masking the appropriate byte
                 // within the word currently written to
-                io.ocp_interface.master.bits.mAddr := secstart_reg & ~(0x3.U)
+                io.ocp_interface.master.bits.mAddr := secstart_reg & ~(0x3.U((Loader.secstart_reg_BYTES * 8).W))
                 io.ocp_interface.master.bits.mData := io.data_in.bits << (offset * 8.U)
                 io.ocp_interface.master.bits.mCmd := OCP.MCmd.write.U
                 io.ocp_interface.master.bits.mByteEn := velonamp.util.genWriteBitMask(secstart_reg, 1.U)
