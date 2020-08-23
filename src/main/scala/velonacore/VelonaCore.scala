@@ -39,7 +39,6 @@ class VelonaCore extends Module {
   val mem_read_data     = io.data_mem_port.data_in
   val exec_control_flow = branch.io.do_branch || (decode.io.op === ISA.OP_jal)
 
-
   // ========================= Architetural registers ==========================
   io.reg_port.read.address := instr_data(7, 0)
   io.reg_port.read.data.ready := control.io.ctrl_reg_op === CTRL.MEM.rd
@@ -63,7 +62,8 @@ class VelonaCore extends Module {
   io.data_mem_port.data_out := acc_reg
   when(control.io.ctrl_mem_op =/= CTRL.MEM.nop) {
     io.data_mem_port.op.valid := 1.B
-    io.data_mem_port.op.bits := Mux(control.io.ctrl_mem_op === CTRL.MEM.rd,
+    io.data_mem_port.op.bits := Mux(
+      control.io.ctrl_mem_op === CTRL.MEM.rd,
       MemoryExclusiveReadWriteInterface.op_rd,
       MemoryExclusiveReadWriteInterface.op_wr
     )
@@ -129,10 +129,13 @@ class VelonaCore extends Module {
     is(CTRL.ALU_OP2.reg) { alu.io.op2 := reg_read_data.asSInt }
   }
 
-  // Program counter source selection
+  // Next-state register values
   when(io.soft_reset) {
     pc_reg := io.reset_pc
+    acc_reg := 0.U
+    addr_reg := 0.U
   }.elsewhen(state.io.continue) {
+    // Program counter source selection
     when(branch.io.do_branch) {
       pc_reg := alu.io.out.asUInt()
     }.elsewhen(decode.io.op === ISA.OP_jal) {
@@ -140,18 +143,19 @@ class VelonaCore extends Module {
     }.otherwise {
       pc_reg := pc_reg + ISA.INSTR_BYTES.U
     }
+
+    // Accumulator source selection
+    switch(control.io.ctrl_acc) {
+      is(CTRL.ACC_SRC.alu) { acc_reg := alu.io.out.asUInt }
+      is(CTRL.ACC_SRC.reg) { acc_reg := reg_read_data }
+      is(CTRL.ACC_SRC.mem) { acc_reg := mem_read_data }
+      is(CTRL.ACC_SRC.acc) { acc_reg := acc_reg }
+    }
+
+    // Address register source selection
+    when(decode.io.op === ISA.OP_ldaddr) { addr_reg := reg_read_data }
   }
 
-  // Accumulator source selection
-  switch(control.io.ctrl_acc) {
-    is(CTRL.ACC_SRC.alu) { acc_reg := alu.io.out.asUInt }
-    is(CTRL.ACC_SRC.reg) { acc_reg := reg_read_data }
-    is(CTRL.ACC_SRC.mem) { acc_reg := mem_read_data }
-    is(CTRL.ACC_SRC.acc) { acc_reg := acc_reg }
-  }
-
-  // Address register source selection
-  when(decode.io.op === ISA.OP_ldaddr) { addr_reg := reg_read_data }
 }
 
 object VelonaCore extends App {

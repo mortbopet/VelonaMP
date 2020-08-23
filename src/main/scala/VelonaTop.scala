@@ -8,7 +8,6 @@ import velonamp.memory._
 import velonamp.interconnect._
 import velonamp.peripherals._
 
-import chisel3.iotesters.{ChiselFlatSpec, Driver, PeekPokeTester}
 import chisel3.util.switch
 
 /**
@@ -83,56 +82,4 @@ class VelonaTop extends Module {
 
 object VelonaTop extends App {
   chisel3.Driver.execute(Array[String](), () => new VelonaTop())
-}
-
-class VelonaTopTester(c: VelonaTop, baud : Int, freq : Int) extends PeekPokeTester(c) {
-  val baud_cycles = freq / baud
-  def tx(bit : Int) {
-      poke(c.io.uart_rx, bit)
-      step(baud_cycles)
-  }
-  def intToBitSeq(v : Int) = (0 until 8).map{ i => (v >> i) & 1}
-
-  val bytes = List(
-        intToBitSeq(2), // Select "Load" function
-        intToBitSeq(1), // # sections
-        intToBitSeq(0), // section start B0
-        intToBitSeq(0), // section start B1
-        intToBitSeq(0), // section start B2
-        intToBitSeq(0), // section start B2
-        intToBitSeq(4), // # bytes B0
-        intToBitSeq(0), // # bytes B0
-        intToBitSeq(0), // # bytes B0
-        intToBitSeq(0), // # bytes B0
-        intToBitSeq(5),// data bytes B0 (immediate)
-        intToBitSeq(9),// data bytes B1 (ADDI)
-        intToBitSeq(-1),// data bytes B0 (immediate)
-        intToBitSeq(0x8F)// data bytes B1 (BR + imm)
-    )
-
-    for (byte <- bytes) {
-        // Start bit
-        tx(0)
-
-        // Data
-        for (bit <- byte) {
-            tx(bit)
-        }
-
-        // Stop bits
-        tx(1)
-        tx(1)
-        step((baud_cycles * 0.23).toInt)
-    }
-
-    step(baud_cycles * 20)
-}
-
-class VelonaTopSpec extends ChiselFlatSpec {
-  "VelonaTop" should "pass" in {
-    Driver.execute(Array("--generate-vcd-output", "on") ,()
-        => new VelonaTop) { c =>
-      new VelonaTopTester(c, velonamp.util.LOADER_UART_BAUD, velonamp.util.F_HZ)
-    } should be(true)
-  }
 }
